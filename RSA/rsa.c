@@ -57,22 +57,29 @@ BIGNUM* exEuclid(BIGNUM* a,BIGNUM* b, BIGNUM** x){
 
 void bytesToBits(unsigned char* bytes,int bytesLen,unsigned char** bits,int bitsLen){
 
-    int i,j,idx;
+    int i, j, idx;
     char unsigned source;
-    int bitNum= 8;
-    idx =0;
-    for(i=0;i<bytesLen;i++){
+    int bitNum = 8;
+    idx = 0;
+
+    for( i = 0; i < bytesLen; i++){
         source = bytes[i];
 
         for(j = 0; j < bitNum; j++){
             bits[0][idx+j] = ((source & (1 << j)) > 0);
-            //printf("%c",bits[0][idx+j]);
+            #ifdef DEBUG
+            printf("%c",bits[0][idx+j]);
+            #endif
         }
 
         idx+=8;
-        //printf("source : %d byteidx: %d idx : %d\n",source,i,idx);
+        #ifdef DEBUG
+        printf("source : %d byteidx: %d idx : %d\n",source,i,idx);
+        #endif
     }
-   //printf("%s\n",*bits);
+    #ifdef DEBUG
+    printf("%s\n",*bits);
+    #endif
 }
 
 void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
@@ -96,14 +103,16 @@ void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
 
     BN_one(z);
 
-    for(i=BN_num_bits(p)-1;i>=0;i--){
+    for(i = BN_num_bits(p)-1; i >= 0; i--){
 
-        BN_mod_sqr(z,z,m,bnCtx);
-        //printf("%c",bits[i]);
+        BN_mod_sqr(z, z, m, bnCtx);
+        #ifdef DEBUG
+        printf("%c",bits[i]);
+        #endif
         if(bits[i] == 1){
             BN_mod_mul(z,z,x,m,bnCtx);
         }
-        if(bits[i] != 0 && bits[i] !=1){
+        if(bits[i] != 0 && bits[i] != 1){
             printf("bit :%c:%d ",bits[i],i);
         }
     }
@@ -112,7 +121,6 @@ void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
     printf("\n");
 
     *result = BN_dup(z);
-
 }
 
 void test(){
@@ -120,7 +128,7 @@ void test(){
     BIGNUM* mod =BN_new();
     BIGNUM* byte =BN_new();
     BIGNUM* result = BN_new();
-    char* re;
+    char *re;
     char *ttwo, *tmod,*tbyte;
 
     BN_dec2bn(&two,"2");
@@ -146,6 +154,7 @@ void test(){
 
     printf("2^3 mod 7 result : %s\n",re);
 }
+
 int main(int argc,char* argv[]){
 
     BIGNUM *prime1 = BN_new();
@@ -162,7 +171,6 @@ int main(int argc,char* argv[]){
 
     char* msg = "ITSP7501";
     char* decMsg;
-
 
     BN_dec2bn(&e,"65537");
 
@@ -215,8 +223,9 @@ int main(int argc,char* argv[]){
 
     BN_bn2bin(temp1,decMsg);
 
-    //printf("dec msg :%s\n",decMsg);
-
+    #ifdef DEBUG
+    printf("dec msg :%s\n",decMsg);
+    #endif
 
     test();
 
