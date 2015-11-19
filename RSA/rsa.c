@@ -51,7 +51,7 @@ BIGNUM* exEuclid(BIGNUM* a,BIGNUM* b, BIGNUM** x){
     }
 
     *x = BN_dup(ud);
-    
+
     return d;
 }
 
@@ -59,7 +59,7 @@ void bytesToBits(unsigned char* bytes,int bytesLen,unsigned char** bits,int bits
 
     int i,j,idx;
     char unsigned source;
-    int bitNum= 8; 
+    int bitNum= 8;
     idx =0;
     for(i=0;i<bytesLen;i++){
         source = bytes[i];
@@ -72,7 +72,7 @@ void bytesToBits(unsigned char* bytes,int bytesLen,unsigned char** bits,int bits
         idx+=8;
         //printf("source : %d byteidx: %d idx : %d\n",source,i,idx);
     }
-   //printf("%s\n",*bits); 
+   //printf("%s\n",*bits);
 }
 
 void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
@@ -95,9 +95,9 @@ void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
     printf("-- %d --\n",BN_num_bytes(p));
 
     BN_one(z);
-     
+
     for(i=BN_num_bits(p)-1;i>=0;i--){
-        
+
         BN_mod_sqr(z,z,m,bnCtx);
         //printf("%c",bits[i]);
         if(bits[i] == 1){
@@ -107,10 +107,10 @@ void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
             printf("bit :%c:%d ",bits[i],i);
         }
     }
-    BN_mod(NULL,z,m,bnCtx);   
+    BN_mod(NULL,z,m,bnCtx);
 
     printf("\n");
-    
+
     *result = BN_dup(z);
 
 }
@@ -135,7 +135,7 @@ void test(){
     BN_bn2bin(mod, tmod);
     tbyte = (char*)malloc(BN_num_bytes(byte));
     BN_bn2bin(byte, tbyte);
-    
+
     BN_bin2bn(ttwo, BN_num_bytes(two), two);
     BN_bin2bn(tmod, BN_num_bytes(mod), mod);
     BN_bin2bn(tbyte, BN_num_bytes(byte), byte);
@@ -155,9 +155,9 @@ int main(int argc,char* argv[]){
     BIGNUM *temp2 = BN_new();
     BIGNUM *phi = BN_new();
     BIGNUM *d = BN_new();
-    BIGNUM *e = BN_new(); 
+    BIGNUM *e = BN_new();
     BIGNUM *encMsg = BN_new();
-   
+
     BN_CTX *bnCtx = BN_CTX_new();
 
     char* msg = "ITSP7501";
@@ -180,39 +180,39 @@ int main(int argc,char* argv[]){
     }while(!BN_is_one(temp1));
 
     exEuclid(e,phi,&d);
-    
+
     BN_mod_mul(temp1,e,d,phi,bnCtx);
 
     if(BN_is_one(temp1)){
         printf("OK\n");
     }else{
         printf("error exEuclid\n");
-        return;
+        return 1;
     }
 
     //encryption
     printf("msg : %s\n",msg);
-    
+
     BN_bin2bn(msg,strlen(msg),encMsg);
     BN_mod_exp(temp1,encMsg,e,modular,bnCtx);
 
     printf("1:%s\n",BN_bn2dec(temp1));
-    
+
     sqrAndMul(encMsg,e,modular,&temp2);
-   
+
     printf("2:%s\n",BN_bn2dec(temp2));
 
     //decryption
     BN_mod_exp(temp1,temp1,d,modular,bnCtx);
-    
+
     printf("3:%s\n",BN_bn2dec(temp1));
-    
+
     sqrAndMul(temp2,d,modular,&temp1);
-    
+
     printf("4:%s\n",BN_bn2dec(temp1));
-    
+
     decMsg = (char*)malloc(BN_num_bytes(temp1));
-    
+
     BN_bn2bin(temp1,decMsg);
 
     //printf("dec msg :%s\n",decMsg);
