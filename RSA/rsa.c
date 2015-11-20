@@ -8,6 +8,8 @@
 #include<openssl/bio.h>
 #include<openssl/sha.h>
 
+#define KEYSIZE 512
+
 BIGNUM* exEuclid(BIGNUM* a,BIGNUM* b, BIGNUM** x){
     BIGNUM* c = BN_new();
     BIGNUM* d = BN_new();
@@ -51,112 +53,68 @@ BIGNUM* exEuclid(BIGNUM* a,BIGNUM* b, BIGNUM** x){
     }
 
     *x = BN_dup(ud);
-
+    
+    //TODO free must locate here
     return d;
 }
 
-void bytesToBits(unsigned char* bytes,int bytesLen,unsigned char** bits,int bitsLen){
-
-    int i, j, idx;
-    char unsigned source;
-    int bitNum = 8;
-    idx = 0;
-
-    for( i = 0; i < bytesLen; i++){
-        source = bytes[i];
-
-        for(j = 0; j < bitNum; j++){
-            bits[0][idx+j] = ((source & (1 << j)) > 0);
-            #ifdef DEBUG
-            printf("%c",bits[0][idx+j]);
-            #endif
-        }
-
-        idx+=8;
-        #ifdef DEBUG
-        printf("source : %d byteidx: %d idx : %d\n",source,i,idx);
-        #endif
+int getBit(BIGNUM *data, int idx, BN_CTX *bnCtx){
+    BIGNUM *output = BN_new();
+    BIGNUM *two = BN_new();
+    BN_dec2bn(&two, "2");
+    
+    BN_rshift(output, data, idx);
+    BN_mod(output, output, two, bnCtx);
+    
+    BN_clear_free(two);
+    if(BN_is_one(output)){
+        BN_clear_free(output);
+        return 1;
     }
-    #ifdef DEBUG
-    printf("%s\n",*bits);
-    #endif
+    else{
+        BN_clear_free(output);
+        return 0;
+    }
 }
 
-void sqrAndMul(BIGNUM *x, BIGNUM *p, BIGNUM *m,BIGNUM** result){
-
-    BIGNUM *z= BN_new();
-    BN_CTX *bnCtx = BN_CTX_new();
+void sqrAndMul(BIGNUM **ret, BIGNUM *x, BIGNUM *p, BIGNUM *m, BN_CTX * bnCtx){
+    //result = x ^ p % m
+    BIGNUM *x1 = BN_new();
+    BIGNUM *x2 = BN_new();
     int i;
-    unsigned char* bytes;
-    unsigned char* bits;
+    int k;  //length of exponent bits
 
-    bytes = (char*)malloc(BN_num_bytes(p));
-    memset(bytes,0,BN_num_bytes(p));
-    BN_bn2bin(p,bytes);
+    //x1, x2 for calculate
+    k = BN_num_bits(p);
+    x1 = BN_dup(x);
+    x2 = BN_dup(x);
+    BN_mod_sqr(x2, x2, m, bnCtx);
 
-    bits = (char*)malloc(BN_num_bits(p));
-    memset(bits,0,BN_num_bits(p));
-    bytesToBits(bytes,BN_num_bytes(p),&bits,BN_num_bits(p));
-
-    printf("-- %d --\n",BN_num_bits(p));
-    printf("-- %d --\n",BN_num_bytes(p));
-
-    BN_one(z);
-
-    for(i = BN_num_bits(p)-1; i >= 0; i--){
-
-        BN_mod_sqr(z, z, m, bnCtx);
-        #ifdef DEBUG
-        printf("%c",bits[i]);
-        #endif
-        if(bits[i] == 1){
-            BN_mod_mul(z,z,x,m,bnCtx);
-        }
-        if(bits[i] != 0 && bits[i] != 1){
-            printf("bit :%c:%d ",bits[i],i);
+    //Montgomery's ladder technique
+    for(i = k-2; i >= 0; i--){
+        if(getBit(p, i, bnCtx)  == 0){
+            BN_mod_mul(x2, x1, x2, m, bnCtx);
+            BN_mod_sqr(x1, x1, m, bnCtx);
+        } else {
+            BN_mod_mul(x1, x1, x2, m, bnCtx);
+            BN_mod_sqr(x2, x2, m, bnCtx);
         }
     }
-    BN_mod(NULL,z,m,bnCtx);
+#ifdef DEBUG
+    printf("x1:%s\n",BN_bn2dec(x1));*/
+#endif
+    BN_clear_free(*ret); //prevent memleak
 
-    printf("\n");
+    //return
+    *ret = BN_dup(x1);
 
-    *result = BN_dup(z);
-}
-
-void test(){
-    BIGNUM* two =BN_new();
-    BIGNUM* mod =BN_new();
-    BIGNUM* byte =BN_new();
-    BIGNUM* result = BN_new();
-    char *re;
-    char *ttwo, *tmod,*tbyte;
-
-    BN_dec2bn(&two,"2");
-    BN_dec2bn(&mod,"7");
-    BN_dec2bn(&byte,"10");
-
-    printf("------------------start-----------\n");
-
-    ttwo = (char*)malloc(BN_num_bytes(two));
-    BN_bn2bin(two, ttwo);
-    tmod = (char*)malloc(BN_num_bytes(mod));
-    BN_bn2bin(mod, tmod);
-    tbyte = (char*)malloc(BN_num_bytes(byte));
-    BN_bn2bin(byte, tbyte);
-
-    BN_bin2bn(ttwo, BN_num_bytes(two), two);
-    BN_bin2bn(tmod, BN_num_bytes(mod), mod);
-    BN_bin2bn(tbyte, BN_num_bytes(byte), byte);
-
-    sqrAndMul(two,byte,mod,&result);
-
-    re =BN_bn2dec(result);
-
-    printf("2^3 mod 7 result : %s\n",re);
+    //mem free
+    BN_clear_free(x1);
+    BN_clear_free(x2);
 }
 
 int main(int argc,char* argv[]){
-
+    BN_CTX *bnCtx = BN_CTX_new();
     BIGNUM *prime1 = BN_new();
     BIGNUM *prime2 = BN_new();
     BIGNUM *modular = BN_new();
@@ -166,68 +124,74 @@ int main(int argc,char* argv[]){
     BIGNUM *d = BN_new();
     BIGNUM *e = BN_new();
     BIGNUM *encMsg = BN_new();
-
-    BN_CTX *bnCtx = BN_CTX_new();
-
+    BIGNUM *final = BN_new();
     char* msg = "ITSP7501";
     char* decMsg;
 
     BN_dec2bn(&e,"65537");
 
-    //setup
+    //KEYGEN START
     do{
-        BN_generate_prime_ex(prime1,512,1,NULL,NULL,NULL);
-        BN_generate_prime_ex(prime2,512,1,NULL,NULL,NULL);
-
-        BN_mul(modular,prime1,prime2,bnCtx);
-
-        BN_sub(temp1,prime1,BN_value_one());
-        BN_sub(temp2,prime2,BN_value_one());
-        BN_mul(phi,temp1,temp2,bnCtx);
-        BN_gcd(temp1,e,phi,bnCtx);
+        BN_generate_prime_ex(prime1, KEYSIZE, 1, NULL, NULL, NULL);
+        BN_generate_prime_ex(prime2, KEYSIZE, 1, NULL, NULL, NULL);
+        BN_mul(modular, prime1, prime2, bnCtx);
+        BN_sub(temp1, prime1, BN_value_one());
+        BN_sub(temp2, prime2, BN_value_one());
+        BN_mul(phi, temp1, temp2, bnCtx);
+        BN_gcd(temp1, e, phi, bnCtx);
     }while(!BN_is_one(temp1));
-
+    //calculate d
     exEuclid(e,phi,&d);
-
+    BN_nnmod(d, d, phi, bnCtx); //to positive number
+#ifdef DEBUG
     BN_mod_mul(temp1,e,d,phi,bnCtx);
-
     if(BN_is_one(temp1)){
-        printf("OK\n");
+        printf("e * d is 1 ... OK\n");
     }else{
         printf("error exEuclid\n");
         return 1;
     }
+#endif
+    //END OF KEYGEN
 
-    //encryption
+    //ENC
     printf("msg : %s\n",msg);
+    BN_bin2bn(msg, strlen(msg), encMsg);
+    printf("0:%s\n", BN_bn2dec(encMsg));
+    BN_bn2bin(encMsg, decMsg);
+    printf("0:%s\n", decMsg);
+    BN_mod_exp(temp1, encMsg, e, modular, bnCtx);
+    printf("1:%s\n", BN_bn2dec(temp1));
+    sqrAndMul(&temp2, encMsg, e, modular, bnCtx);
+    printf("2:%s\n", BN_bn2dec(temp2));
+    printf("\n");
 
-    BN_bin2bn(msg,strlen(msg),encMsg);
-    BN_mod_exp(temp1,encMsg,e,modular,bnCtx);
+    //DEC
+    printf("3c:%s\n",BN_bn2dec(temp1));
+    printf("4c:%s\n",BN_bn2dec(temp2));
+    printf("\n");
+    printf("3d:%s\n",BN_bn2dec(d));
+    printf("4d:%s\n",BN_bn2dec(d));
+    printf("\n");
+    printf("3m:%s\n",BN_bn2dec(modular));
+    printf("4m:%s\n",BN_bn2dec(modular));
+    printf("\n");
+    //temp1 = temp1 ^ d % modular
+    BN_mod_exp(temp1, temp1, d, modular, bnCtx);
+    printf("3p:%s\n",BN_bn2dec(temp1));
+    //temp2 = temp2 ^ d % modular
+    sqrAndMul(&final, temp2, d, modular, bnCtx);
+    printf("4p:%s\n",BN_bn2dec(final));
+    printf("\n");
 
-    printf("1:%s\n",BN_bn2dec(temp1));
-
-    sqrAndMul(encMsg,e,modular,&temp2);
-
-    printf("2:%s\n",BN_bn2dec(temp2));
-
-    //decryption
-    BN_mod_exp(temp1,temp1,d,modular,bnCtx);
-
-    printf("3:%s\n",BN_bn2dec(temp1));
-
-    sqrAndMul(temp2,d,modular,&temp1);
-
-    printf("4:%s\n",BN_bn2dec(temp1));
-
-    decMsg = (char*)malloc(BN_num_bytes(temp1));
-
+    decMsg = (char*)malloc(BN_num_bytes(temp2));
     BN_bn2bin(temp1,decMsg);
+    printf("3 dec msg :%s\n",decMsg);
+    free(decMsg);
 
-    #ifdef DEBUG
-    printf("dec msg :%s\n",decMsg);
-    #endif
-
-    test();
+    decMsg = (char*)malloc(BN_num_bytes(final));
+    BN_bn2bin(final,decMsg);
+    printf("4 dec msg :%s\n",decMsg);
 
     return 0;
 }
